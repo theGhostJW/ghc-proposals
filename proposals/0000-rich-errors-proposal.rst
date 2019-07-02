@@ -269,6 +269,24 @@ There are a few alternatives:
    proposal laid out above can capture most of the precision of a fully
    structured representation with a fraction of the maintanence overhead.
 
+ * Adopt the above plan, but with "scoped" annotations. Under this model (which
+   is used by Idris and is already supported by the ``pretty`` library used by
+   GHC) the ``embed`` combinator is replaced by ``annotate`` ::
+
+        annotate :: a -> SDoc a -> SDoc a
+
+   That is, an annotation "covers" a subdocument. While more convenient, we
+   think that this model is restrictive and potential confusing for consumers.
+
+   Specifically, with an ``annotate``-style document the consumer must consider the
+   possibility that there is information in the sub-document that is *not*
+   conveyed in the annotation. This limits the sorts of presentations that
+   a consumer can choose since they are forced to *somehow* display the
+   sub-document, whether or not it contributes any new information to the user.
+
+   By contrast, with an ``embed``-style document it is clear that the embedded
+   value represents a piece of the document which the consumer is free to
+   render in any way it sees fit.
 
 Unresolved Questions
 --------------------
