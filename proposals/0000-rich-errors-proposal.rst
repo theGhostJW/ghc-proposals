@@ -24,7 +24,9 @@ Currently IDE tools (e.g. `Haskell IDE Engine
 <https://github.com/haskell/haskell-ide-engine>`_) have to rely parsing GHC's
 human-readable error messages to glean even a basic understanding of the nature
 of the error. Not only is this parsing fragile, it also severely limits the
-sorts of information the tool can gather about the error.
+sorts of information the tool can gather about the error. This is unfortunate
+since, as GHC ventures further into the territory of dependent types, error
+messages grow in complexity and size.
 
 Other languages (e.g. Idris, with their Emacs mode) have `demonstrated
 <https://www.youtube.com/watch?v=m7BBCcIDXSg>`_ that enriching error message
