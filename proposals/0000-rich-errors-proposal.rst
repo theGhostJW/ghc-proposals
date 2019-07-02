@@ -34,12 +34,18 @@ representations with embedded AST elements can open the door to useful
 interactions between the user, IDE tools, and the compiler. Let's open this
 door.
 
+Note that this proposal is **not** about changing the default presentation of
+error messages produced by the ``ghc`` executable. Rather, it merely discusses
+the plumbing necessary to enable downstream consumers (e.g. REPL shells, editor
+extensions, and language servers) to make these changes on their own.
+
 Also see `GHC #8809 <https://gitlab.haskell.org/ghc/ghc/issues/8809>`_.
 
 
 Proposed Change Specification
 -----------------------------
-Error messages in GHC are currently represented as simple pretty-printer documents ::
+Error messages in GHC are currently represented as simple pretty-printer
+documents ::
 
     -- | A pretty-printer document
     data SDoc
@@ -58,14 +64,24 @@ We propose to refactor this into ::
 In this scheme ``SDoc`` would be a monadic-style pretty-printer document as
 provided by ``wl-ppprint-extras``.
 
-The ``ErrorMessageItem`` type would be a sum type including a number of AST
-elements frequently found in error messages. Initially, we propose the
-following ::
+The ``ErrorMessageItem`` type would be a sum type including a variety of
+elements frequently found in error messages that tooling users would find
+useful to have available in structured form. There are a number of things that
+might be included in this type but the initial cases we propose here fall into
+a few categories which we will address below.
+
+Haskell AST elements
+~~~~~~~~~~~~~~~~~~~~
+
+These are the elements of the program we are compiling. For instance ::
 
     data ErrorMessageItem
       = ESrcSpan SrcSpan  -- A source span
       | EIdentifier Id    -- An identifier
       | EType       Type  -- An identifier
+
+Error message idioms
+~~~~~~~~~~~~~~~~~~~~
 
 In addition, we can also capture common idioms found in error messages. For
 instance, consider the case of the all-too-frequent expected-actual error ::
@@ -82,9 +98,32 @@ This could be represented as ::
 
     data ErrorMessageItem
       = ...
-      | EExpectedActual Type Type
-                          -- A pair of a type that the typechecker expected to find
-                          -- and a 
+      | EExpectedActual { expectedType :: Type -- ^ what the typechecker expected
+                        , actualType   :: Type -- ^ what the typechecker actually found
+                        }
+
+Likewise, the message,
+
+.. code-block:: none
+
+    hi.hs:5:5: error:
+        • Variable not in scope: foldl'
+        • Perhaps you meant one of these:
+            ‘foldl’ (imported from Data.Foldable),
+            ‘foldl1’ (imported from Prelude), ‘foldr’ (imported from Prelude)
+          Perhaps you want to add ‘foldl'’ to the import list
+          in the import of ‘Data.Foldable’ (hi.hs:3:1-28).
+
+This could be represented as ::
+
+    data ErrorMessageItem
+      = ...
+      | ENotInScope { badName               :: OccName
+                    , suggestedAlternatives :: [Name]
+                    }
+
+Refactoring Actions
+~~~~~~~~~~~~~~~~~~~
 
 Additionally, we could further include more action-oriented items. For
 instance, in numerous places GHC suggests enabling a language extension:
@@ -101,7 +140,7 @@ This could be represented as ::
       = ...
       | ESuggestExtension LanguageExtension
 
-Likewise, suggestions of changes to ``import`` statements:
+Likewise, suggestions of changes to ``import`` statements, e.g.
 
 .. code-block:: none
 
@@ -113,7 +152,7 @@ Likewise, suggestions of changes to ``import`` statements:
           Perhaps you want to add ‘foldl'’ to the import list
           in the import of ‘Data.Foldable’ (hi.hs:3:1-28).
 
-Can be encoded as ::
+can be encoded as ::
 
     data ErrorMessageItem
       = ...
@@ -152,15 +191,26 @@ Costs and Drawbacks
 -------------------
 
 Judging from a prototype implementation undertaken a few years ago, the impact
-of the change in the pretty-printer on the compiler itself appears to be minimal.
+of embedding structured data instead of producing pretty-printer documents is
+quite minimal. The idioms which we are trying to represent are implemented
+in helper functions in ``TcErrors``, anyways.
 
-The largest challenge in this proposal
-is designing a vocabulary of ``ErrorMessageItem``\s that can be usefully and
-unambiguously interpreted by error message consumers. We propose a few simple
-items in the design discussion above, but we only scratch the surface of what
-could be encoded. We hope that the discussion that arises from this proposal
-will shed light on additional items. Moreover, we anticipate that the
-vocabulary will grow in time as new tooling applications are found.
+One unexpected challenge in implementing the prototype was the difficulty of 
+finding or adapting a pretty-printer library with the desired monadic
+annotation semantics that does not break the formatting of GHC's error message
+output. A previous attempt at using the ``prettyprinter`` library `found
+<https://github.com/quchen/prettyprinter/issues/34>` that GHC's error messages
+generally include a great deal of superfluous whitespace which is eliminated by
+the ``pretty`` library yet not by most other libraries.
+
+The largest challenge in this proposal is designing a vocabulary of
+``ErrorMessageItem``\s that can be usefully and unambiguously interpreted by
+error message consumers. We propose a few simple items in the design discussion
+above, but we only scratch the surface of what could be encoded. We hope that
+the discussion that arises from this proposal will shed light on additional
+items. Moreover, we anticipate that the vocabulary will grow in time as new
+tooling applications are found.
+
 
 Alternatives
 ------------
