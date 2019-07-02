@@ -211,24 +211,24 @@ documents via the GHC API, we allow tooling authors significantly more
 flexibility in presenting (and automatically fixing) compile-time errors.
 We list a few compelling applications below (roughly in order of complexity):
 
- * A REPL front-end might implement color-coded output, choosing a token's
-   color by its syntactic class (e.g. type constructor, data constructor, or
-   identifier), its name (e.g. all occurrences of ``foldl`` shown in red,
-   occurrences of ``concat`` shown in blue), or some other criterion entirely.
+* A REPL front-end might implement color-coded output, choosing a token's
+  color by its syntactic class (e.g. type constructor, data constructor, or
+  identifier), its name (e.g. all occurrences of ``foldl`` shown in red,
+  occurrences of ``concat`` shown in blue), or some other criterion entirely.
 
- * A REPL front-end or IDE tool might allow users the ability to interactively
-   navigate a type in a type error and, for instance, allow the user to
-   interactively expand type synonyms, show kind signatures, etc.
+* A REPL front-end or IDE tool might allow users the ability to interactively
+  navigate a type in a type error and, for instance, allow the user to
+  interactively expand type synonyms, show kind signatures, etc.
 
- * An IDE tool might ask GHC to defer expensive analyses typically done
-   during error message construction (e.g. `computing valid hole fits
-   <https://gitlab.haskell.org/ghc/ghc/issues/16875#note_210045>`_) and instead
-   query GHC for the analysis result asynchronously (or even only when
-   requested by the user), shrinking the edit/typechecking iteration time.
+* An IDE tool might ask GHC to defer expensive analyses typically done
+  during error message construction (e.g. `computing valid hole fits
+  <https://gitlab.haskell.org/ghc/ghc/issues/16875#note_210045>`_) and instead
+  query GHC for the analysis result asynchronously (or even only when
+  requested by the user), shrinking the edit/typechecking iteration time.
 
- * An IDE tool might use the action-items (e.g. ``ESuggestExtension`` and
-   ``ESuggestAddedImport`` above) to present automated refactoring options to
-   the user.
+* An IDE tool might use the action-items (e.g. ``ESuggestExtension`` and
+  ``ESuggestAddedImport`` above) to present automated refactoring options to
+  the user.
 
 
 Costs and Drawbacks
@@ -260,33 +260,33 @@ Alternatives
 ------------
 There are a few alternatives:
 
- * Continuing representing error messages as plain pretty-printer documents.
-   We think this would be a shame as it would 
+* Continuing representing error messages as plain pretty-printer documents.
+  We think this would be a shame as it would 
 
- * Represent error messages as fully structured data using a large sum
-   type. Core GHC contributors have in the past opposed this approach on
-   account of maintanence difficulty. We agree and further think that the
-   proposal laid out above can capture most of the precision of a fully
-   structured representation with a fraction of the maintanence overhead.
+* Represent error messages as fully structured data using a large sum
+  type. Core GHC contributors have in the past opposed this approach on
+  account of maintanence difficulty. We agree and further think that the
+  proposal laid out above can capture most of the precision of a fully
+  structured representation with a fraction of the maintanence overhead.
 
- * Adopt the above plan, but with "scoped" annotations. Under this model (which
-   is used by Idris and is already supported by the ``pretty`` library used by
-   GHC) the ``embed`` combinator is replaced by ``annotate`` ::
+* Adopt the above plan, but with "scoped" annotations. Under this model (which
+  is used by Idris and is already supported by the ``pretty`` library used by
+  GHC) the ``embed`` combinator is replaced by ``annotate`` ::
 
-        annotate :: a -> SDoc a -> SDoc a
+       annotate :: a -> SDoc a -> SDoc a
 
-   That is, an annotation "covers" a subdocument. While more convenient, we
-   think that this model is restrictive and potential confusing for consumers.
+  That is, an annotation "covers" a subdocument. While more convenient, we
+  think that this model is restrictive and potential confusing for consumers.
 
-   Specifically, with an ``annotate``-style document the consumer must consider the
-   possibility that there is information in the sub-document that is *not*
-   conveyed in the annotation. This limits the sorts of presentations that
-   a consumer can choose since they are forced to *somehow* display the
-   sub-document, whether or not it contributes any new information to the user.
+  Specifically, with an ``annotate``-style document the consumer must consider the
+  possibility that there is information in the sub-document that is *not*
+  conveyed in the annotation. This limits the sorts of presentations that
+  a consumer can choose since they are forced to *somehow* display the
+  sub-document, whether or not it contributes any new information to the user.
 
-   By contrast, with an ``embed``-style document it is clear that the embedded
-   value represents a piece of the document which the consumer is free to
-   render in any way it sees fit.
+  By contrast, with an ``embed``-style document it is clear that the embedded
+  value represents a piece of the document which the consumer is free to
+  render in any way it sees fit.
 
 Unresolved Questions
 --------------------
