@@ -45,10 +45,10 @@ Also see `GHC #8809 <https://gitlab.haskell.org/ghc/ghc/issues/8809>`_.
 Proposed Change Specification
 -----------------------------
 Error messages in GHC are currently represented as simple pretty-printer
-documents ::
+documents (note: this is slightly simplified for the sake of discussion) ::
 
     -- | A pretty-printer document.
-    data SDoc
+    data SDoc = ...
 
     -- | An error message.
     type ErrMsg = SDoc
@@ -57,6 +57,8 @@ We propose to refactor this into ::
 
     -- | A pretty-printer document.
     data SDoc' a
+      = ...
+      | Pure a
 
     -- | A document containing embedded 'ErrorMessageItem's.
     type SDoc = SDoc' ErrorMessageItem
@@ -287,6 +289,20 @@ There are a few alternatives:
   By contrast, with an ``embed``-style document it is clear that the embedded
   value represents a piece of the document which the consumer is free to
   render in any way it sees fit.
+
+* Richard Eisenberg has `suggested
+  <https://gitlab.haskell.org//ghc/ghc/issues/8809#note_101739>`_ a
+  dynamically-typed variant of the above idea. That is, ``SDoc`` would be
+  extended with a constructor: ::
+
+      data SDoc where
+          ...
+          Embed :: forall a. (Typeable a, Outputable a) => a -> SDoc
+
+  This gives us a slightly more flexible representation at the expense of 
+  easy of consumption. In particular, it will be much harder for consumers
+  to know what sort of things it should expect in a document.
+
 
 Unresolved Questions
 --------------------
