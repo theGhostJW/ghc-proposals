@@ -70,13 +70,27 @@ useful to have available in structured form. There are a number of things that
 might be included in this type but the initial cases we propose here fall into
 a few categories which we will address below.
 
+Error message metadata
+~~~~~~~~~~~~~~~~~~~~~~
+
+This captures some metadata typical of errors ::
+
+    data ErrorMessageItem
+      = EWarningHeader
+            { srcSpan    :: SrcSpan
+            , warnFlag   :: Maybe WarningFlag
+              -- ^ Which warning flag can be used 
+              -- to disable the warning
+            }
+
 Haskell AST elements
 ~~~~~~~~~~~~~~~~~~~~
 
 These are the elements of the program we are compiling. For instance ::
 
     data ErrorMessageItem
-      = ESrcSpan SrcSpan  -- A source span
+      = ...
+      | ESrcSpan SrcSpan  -- A source span
       | EIdentifier Id    -- An identifier
       | EType       Type  -- An identifier
 
@@ -160,6 +174,33 @@ can be encoded as ::
                                           -- and suggested Name to import
 
 
+An Example
+~~~~~~~~~~
+
+In general error messages will be built from plain pretty-printer documents
+with embedded ``ErrorMessageItem``\s. For instance, consider the error
+
+.. code-block:: none
+
+    hi.hs:5:5: error:
+        • Variable not in scope: foldl'
+        • Perhaps you meant one of these:
+            ‘foldl’ (imported from Data.Foldable),
+            ‘foldl1’ (imported from Prelude), ‘foldr’ (imported from Prelude)
+          Perhaps you want to add ‘foldl'’ to the import list
+          in the import of ‘Data.Foldable’ (hi.hs:3:1-28).
+
+This might be built by GHC as ::
+
+    pure (EErrorHeader $span Nothing)
+    <> pure (ENotInScope $foldl') [ $foldl, $foldl1 ]
+    <> pure (ESuggestAddedImport $import_span $foldl') [ $foldl, $foldl1 ]
+
+where ``$foo`` denotes the GHC AST item for ``foo`` and ``pure`` lifts an
+``ErrorMessageItem`` into an ``SDoc``::
+
+    pure :: ErrorMessageItem -> SDoc ErrorMessageItem
+
 Effect and Interactions
 -----------------------
 By introducing rich semantic content into error messages and exposing these
@@ -203,13 +244,13 @@ output. A previous attempt at using the ``prettyprinter`` library `found
 generally include a great deal of superfluous whitespace which is eliminated by
 the ``pretty`` library yet not by most other libraries.
 
-The largest challenge in this proposal is designing a vocabulary of
+The greatest challenge in this proposal is designing a vocabulary of
 ``ErrorMessageItem``\s that can be usefully and unambiguously interpreted by
 error message consumers. We propose a few simple items in the design discussion
-above, but we only scratch the surface of what could be encoded. We hope that
-the discussion that arises from this proposal will shed light on additional
-items. Moreover, we anticipate that the vocabulary will grow in time as new
-tooling applications are found.
+above, but we only scratch the surface of what could be encoded and what might
+be useful. We hope that the discussion that arises from this proposal will shed
+light on additional items. Moreover, we anticipate that the vocabulary will
+grow in time as new tooling applications are found.
 
 
 Alternatives
