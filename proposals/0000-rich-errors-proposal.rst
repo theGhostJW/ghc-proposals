@@ -185,6 +185,6 @@ regarding the design of the ``ErrorMessageItem`` type remain open.
 Implementation Plan
 -------------------
 
-Well-Typed LLP will implement this proposal, with financial support from
+Well-Typed LLP will implement this proposal with financial support from
 Richard Eisenberg.
 
