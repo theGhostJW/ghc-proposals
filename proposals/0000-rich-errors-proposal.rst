@@ -123,7 +123,8 @@ Effect and Interactions
 -----------------------
 By introducing rich semantic content into error messages and exposing these
 documents via the GHC API, we allow tooling authors significantly more
-flexibility in presenting (and automatically fixing) compile-time errors:
+flexibility in presenting (and automatically fixing) compile-time errors.
+We list a few compelling applications below (roughly in order of complexity):
 
  * A REPL front-end might implement color-coded output, choosing a token's
    color by its syntactic class (e.g. type constructor, data constructor, or
@@ -147,22 +148,43 @@ flexibility in presenting (and automatically fixing) compile-time errors:
 
 Costs and Drawbacks
 -------------------
-Give an estimate on development and maintenance costs. List how this effects learnability of the language for novice users. Define and list any remaining drawbacks that cannot be resolved.
 
+Judging from a prototype implementation undertaken a few years ago, the impact
+of the change in the pretty-printer on the compiler itself appears to be minimal.
+
+The largest challenge in this proposal
+is designing a vocabulary of ``ErrorMessageItem``\s that can be usefully and
+unambiguously interpreted by error message consumers. We propose a few simple
+items in the design discussion above, but we only scratch the surface of what
+could be encoded. We hope that the discussion that arises from this proposal
+will shed light on additional items. Moreover, we anticipate that the
+vocabulary will grow in time as new tooling applications are found.
 
 Alternatives
 ------------
-List existing alternatives to your proposed change as they currently exist and discuss why they are insufficient.
+There are a few alternatives:
+
+ * Continuing representing error messages as plain pretty-printer documents.
+   We think this would be a shame as it would 
+
+ * Represent error messages as fully structured data using a large sum
+   type. Core GHC contributors have in the past opposed this approach on
+   account of maintanence difficulty. We agree and further think that the
+   proposal laid out above can capture most of the precision of a fully
+   structured representation with a fraction of the maintanence overhead.
 
 
 Unresolved Questions
 --------------------
-Explicitly list any remaining issues that remain in the conceptual design and specification. Be upfront and trust that the community will help. Please do not list *implementation* issues.
 
-Hopefully this section will be empty by the time the proposal is brought to the steering committee.
+As described in the "Costs and Drawbacks" section above, a number of questions
+regarding the design of the ``ErrorMessageItem`` type remain open.
+
 
 
 Implementation Plan
 -------------------
-(Optional) If accepted who will implement the change? Which other ressources and prerequisites are required for implementation?
+
+Well-Typed LLP will implement this proposal, with financial support from
+Richard Eisenberg.
 
