@@ -102,8 +102,9 @@ These are the elements of the program we are compiling. For instance ::
 Error message idioms
 ~~~~~~~~~~~~~~~~~~~~
 
-In addition, we can also capture common idioms found in error messages. For
-instance, consider the case of the all-too-frequent expected-actual error ::
+In addition, we can also capture common idioms found in error messages. Many of
+these are already produced centrally by helpers in GHC's ``TcErrors`` module.
+For instance, consider the case of the all-too-frequent expected-actual error ::
 
 .. code-block:: none
 
