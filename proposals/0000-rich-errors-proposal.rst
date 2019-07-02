@@ -47,19 +47,22 @@ Proposed Change Specification
 Error messages in GHC are currently represented as simple pretty-printer
 documents ::
 
-    -- | A pretty-printer document
+    -- | A pretty-printer document.
     data SDoc
 
-    -- | An error message
+    -- | An error message.
     type ErrMsg = SDoc
 
 We propose to refactor this into ::
 
-    -- | A pretty-printer document
-    data SDoc a
+    -- | A pretty-printer document.
+    data SDoc' a
 
-    -- | An error message
-    type ErrMsg = SDoc ErrorMessageItem
+    -- | A document containing embedded 'ErrorMessageItem's.
+    type SDoc = SDoc' ErrorMessageItem
+
+    -- | An error message.
+    type ErrMsg = SDoc
 
 In this scheme ``SDoc`` would be a monadic-style pretty-printer document as
 provided by ``wl-ppprint-extras``.
