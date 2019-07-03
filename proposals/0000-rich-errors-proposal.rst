@@ -43,7 +43,7 @@ Also see `GHC #8809 <https://gitlab.haskell.org/ghc/ghc/issues/8809>`_.
 
 .. [5] While this proposal took a great deal of inspiration from the work in
        this area done by the Idris community, the proposal differs from their
-       approach in a key detail. See the section "Why not scoped annotations?"
+       approach in a key detail. See the section `Why not scoped annotations?`_
        for further discussion on this.
 
 
@@ -284,7 +284,7 @@ There are a few alternatives:
   structured representation with a fraction of the maintanence overhead.
 
 * Adopt the above plan, but using a "scoped annotations"-style instead of a
-  free monad pretty-printer.  See the "Why not scoped annotations?" section
+  free monad pretty-printer.  See the `Why not scoped annotations?`_ section
   below.
   
 * Richard Eisenberg has `suggested
@@ -293,12 +293,14 @@ There are a few alternatives:
   extended with a constructor: ::
 
       data SDoc where
-          ...
-          Embed :: forall a. (Typeable a, Outputable a) => a -> SDoc
+          = ...
+          | forall a. (Typeable a, Outputable a) => Embed a
 
   This gives us a slightly more flexible representation at the expense of 
   easy of consumption. In particular, it will be much harder for consumers
   to know what sort of things it should expect in a document.
+
+.. _scoped-annotations:
 
 Why not scoped annotations?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
