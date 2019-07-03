@@ -69,33 +69,23 @@ We propose to refactor this into ::
    instance Applicative SDoc'
    instance Monad SDoc'
 
+    -- | A value that can be embedded in an error message.
+    data ErrorMessageItem = ...
+
     -- | A document containing embedded 'ErrorMessageItem's.
     type SDoc = SDoc' ErrorMessageItem
 
     -- | An error message.
     type ErrMsg = SDoc
 
-In this scheme ``SDoc`` would be a monadic-style pretty-printer document as
-provided by ``wl-ppprint-extras``.
+In this scheme ``SDoc`` would be a free-monad-style pretty-printer document
+(e.g. similar to that provided by ``wl-ppprint-extras``).
 
-The ``ErrorMessageItem`` type would be a sum type including a variety of
+The ``ErrorMessageItem`` type is a sum type including a variety of
 elements frequently found in error messages that tooling users would find
 useful to have available in structured form. There are a number of things that
 might be included in this type but the initial cases we propose here fall into
 a few categories which we will address below.
-
-Error message metadata
-~~~~~~~~~~~~~~~~~~~~~~
-
-This captures some metadata typical of errors ::
-
-    data ErrorMessageItem
-      = EWarningHeader
-            { srcSpan    :: SrcSpan
-            , warnFlag   :: Maybe WarningFlag
-              -- ^ Which warning flag can be used 
-              -- to disable the warning
-            }
 
 Haskell AST elements
 ~~~~~~~~~~~~~~~~~~~~
@@ -104,9 +94,9 @@ These are the elements of the program we are compiling. For instance ::
 
     data ErrorMessageItem
       = ...
-      | ESrcSpan SrcSpan  -- A source span
       | EIdentifier Id    -- An identifier
-      | EType       Type  -- An identifier
+      | EExpr       HsExpr  -- A general expression
+      | EType       HsType  -- A type
 
 Error message idioms
 ~~~~~~~~~~~~~~~~~~~~
@@ -119,9 +109,7 @@ For instance, consider the case of the all-too-frequent expected-actual error ::
 
     Test.hs:7:7: error:
         • Couldn't match expected type ‘Int’ with actual type ‘[Char]’
-        • In the first argument of ‘f’, namely ‘"hi"’
-          In the expression: f "hi"
-          In an equation for ‘g’: g = f "hi"
+        ...
    
 This could be represented as ::
 
@@ -175,9 +163,7 @@ Likewise, suggestions of changes to ``import`` statements, e.g.
 
     hi.hs:5:5: error:
         • Variable not in scope: foldl'
-        • Perhaps you meant one of these:
-            ‘foldl’ (imported from Data.Foldable),
-            ‘foldl1’ (imported from Prelude), ‘foldr’ (imported from Prelude)
+          ...
           Perhaps you want to add ‘foldl'’ to the import list
           in the import of ‘Data.Foldable’ (hi.hs:3:1-28).
 
@@ -343,7 +329,7 @@ new information to the user.
 By contrast, with an ``embed``-style document it is clear that the embedded
 value represents a piece of the document which the consumer is free to
 render in any way it sees fit. All of the information relevant to the message
-is guaranteed to be in the 
+is guaranteed to be in the embedded value.
 
 
 Unresolved Questions
