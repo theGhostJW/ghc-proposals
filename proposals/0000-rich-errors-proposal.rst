@@ -79,7 +79,7 @@ We propose to refactor this into ::
     type ErrMsg = SDoc
 
 In this scheme ``SDoc`` would be a free-monad-style pretty-printer document
-(e.g. similar to that provided by ``wl-ppprint-extras``).
+(e.g. similar to that provided by ``wl-pprint-extras``).
 
 The ``ErrorMessageItem`` type is a sum type including a variety of
 elements frequently found in error messages that tooling users would find
