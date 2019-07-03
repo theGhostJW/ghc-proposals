@@ -29,7 +29,7 @@ since, as GHC ventures further into the territory of dependent types, error
 messages grow in complexity and size.
 
 Other languages (e.g. Idris, with their Emacs mode) have `demonstrated
-<https://www.youtube.com/watch?v=m7BBCcIDXSg>`_ that enriching error message
+<https://www.youtube.com/watch?v=m7BBCcIDXSg>`_ [1]_ that enriching error message
 representations with embedded AST elements can open the door to useful
 interactions between the user, IDE tools, and the compiler. Let's open this
 door.
@@ -40,6 +40,11 @@ the plumbing necessary to enable downstream consumers (e.g. REPL shells, editor
 extensions, and language servers) to make these changes on their own.
 
 Also see `GHC #8809 <https://gitlab.haskell.org/ghc/ghc/issues/8809>`_.
+
+.. [5] While this proposal took a great deal of inspiration from the work in
+       this area done by the Idris community, the proposal differs from their
+       approach in a key detail. See the section "Why not scoped annotations?"
+       for further discussion on this.
 
 
 Proposed Change Specification
@@ -59,6 +64,10 @@ We propose to refactor this into ::
     data SDoc' a
       = ...
       | Pure a
+
+   instance Functor SDoc'
+   instance Applicative SDoc'
+   instance Monad SDoc'
 
     -- | A document containing embedded 'ErrorMessageItem's.
     type SDoc = SDoc' ErrorMessageItem
@@ -198,14 +207,15 @@ with embedded ``ErrorMessageItem``\s. For instance, consider the error
 
 This might be built by GHC as ::
 
-    pure (EErrorHeader $span Nothing)
-    <> pure (ENotInScope $foldl') [ $foldl, $foldl1 ]
-    <> pure (ESuggestAddedImport $import_span $foldl') [ $foldl, $foldl1 ]
+    embed (EErrorHeader $span Nothing)
+    <> embed (ENotInScope $foldl' [ $foldl, $foldl1 ])
+    <> embed (ESuggestAddedImport $import_span $foldl' [ $foldl, $foldl1 ])
 
-where ``$foo`` denotes the GHC AST item for ``foo`` and ``pure`` lifts an
+where ``$foo`` denotes the GHC AST item for ``foo`` and ``embed`` lifts an
 ``ErrorMessageItem`` into an ``SDoc``::
 
-    pure :: ErrorMessageItem -> SDoc ErrorMessageItem
+    embed :: ErrorMessageItem -> SDoc ErrorMessageItem
+    embed = pure
 
 Effect and Interactions
 -----------------------
@@ -245,10 +255,11 @@ in helper functions in ``TcErrors``, anyways.
 One unexpected challenge in implementing the prototype was the difficulty of 
 finding or adapting a pretty-printer library with the desired monadic
 annotation semantics that does not break the formatting of GHC's error message
-output. A previous attempt at using the ``prettyprinter`` library `found
-<https://github.com/quchen/prettyprinter/issues/34>` that GHC's error messages
-generally include a great deal of superfluous whitespace which is eliminated by
-the ``pretty`` library yet not by most other libraries.
+output. A previous attempt at using the ``wl-pprint-extras`` library found
+that GHC's error messages generally include a great deal of superfluous
+whitespace which is eliminated by the ``pretty`` library yet not by most other
+libraries (see also this `prettyprinter issue
+<https://github.com/quchen/prettyprinter/issues/34>`_).
 
 The greatest challenge in this proposal is designing a vocabulary of
 ``ErrorMessageItem``\s that can be usefully and unambiguously interpreted by
@@ -272,25 +283,10 @@ There are a few alternatives:
   proposal laid out above can capture most of the precision of a fully
   structured representation with a fraction of the maintanence overhead.
 
-* Adopt the above plan, but with "scoped" annotations. Under this model (which
-  is used by Idris and is already supported by the ``pretty`` library used by
-  GHC) the ``embed`` combinator is replaced by ``annotate`` ::
-
-       annotate :: a -> SDoc a -> SDoc a
-
-  That is, an annotation "covers" a subdocument. While more convenient, we
-  think that this model is restrictive and potential confusing for consumers.
-
-  Specifically, with an ``annotate``-style document the consumer must consider the
-  possibility that there is information in the sub-document that is *not*
-  conveyed in the annotation. This limits the sorts of presentations that
-  a consumer can choose since they are forced to *somehow* display the
-  sub-document, whether or not it contributes any new information to the user.
-
-  By contrast, with an ``embed``-style document it is clear that the embedded
-  value represents a piece of the document which the consumer is free to
-  render in any way it sees fit.
-
+* Adopt the above plan, but using a "scoped annotations"-style instead of a
+  free monad pretty-printer.  See the "Why not scoped annotations?" section
+  below.
+  
 * Richard Eisenberg has `suggested
   <https://gitlab.haskell.org//ghc/ghc/issues/8809#note_101739>`_ a
   dynamically-typed variant of the above idea. That is, ``SDoc`` would be
@@ -303,6 +299,49 @@ There are a few alternatives:
   This gives us a slightly more flexible representation at the expense of 
   easy of consumption. In particular, it will be much harder for consumers
   to know what sort of things it should expect in a document.
+
+Why not scoped annotations?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Idris has a slightly different document representation from what we propose
+here. Specifically, it relies on what we will refer to as "scoped annotations".
+Under this model the ``SDoc`` type is similarly parametrized with an annotation
+type but the ``embed`` combinator is replaced by ``annotate`` ::
+
+    annotate :: a -> SDoc a -> SDoc a
+
+That is, an annotation "covers" a subdocument. While convenient for some
+applications, we think that this model is restrictive and potentially confusing
+for consumers.
+
+Specifically, with an ``annotate``-style document the consumer must consider the
+possibility that there is information in the sub-document that is *not*
+conveyed in the annotation. For instance, we might produce a document like: ::
+
+   let aVar :: Var
+       aVar = ...
+   in annotate aVar (text "the variable" <+> ppr aVar <+> text "is not in scope")
+
+How should a consumer present this document to the user? They have three options:
+
+* They could throw away the sub-document, but this would lose critical
+  information about the error (namely that the named variable is not in scope).
+* They could display *just* the subdocument, but annotation has bought us
+  nothing over the status quo.
+* They could display the submodule but modify it slightly based on the
+  annotation (e.g. rendering it as a hyperlink, changing its text styling,
+  etc).
+
+Because of this potential for information loss when discarding the subdocument,
+the ``annotate``-style pretty-printer model severely limits
+the sorts of presentations that a consumer can choose: they are forced to
+*somehow* display the sub-document, regardless of whether it contributes any
+new information to the user.
+
+By contrast, with an ``embed``-style document it is clear that the embedded
+value represents a piece of the document which the consumer is free to
+render in any way it sees fit. All of the information relevant to the message
+is guaranteed to be in the 
 
 
 Unresolved Questions
