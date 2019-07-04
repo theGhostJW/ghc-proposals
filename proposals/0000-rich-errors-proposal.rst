@@ -69,23 +69,36 @@ We propose to refactor this into ::
    instance Applicative SDoc'
    instance Monad SDoc'
 
-    -- | A value that can be embedded in an error message.
-    data ErrorMessageItem = ...
+   -- | A document containing no annotations whatsoever, can
+   --   be useful for e.g code generation.
+   type SDoc = SDoc' Void
 
-    -- | A document containing embedded 'ErrorMessageItem's.
-    type SDoc = SDoc' ErrorMessageItem
+   -- | Remove all annotations
+   stripAnnotations :: SDoc' a -> SDoc
 
-    -- | An error message.
-    type ErrMsg = SDoc
+   -- | Turn all annotations into purely textual contents
+   renderAnnotations :: (a -> SDoc) -> SDoc' a -> SDoc
 
-In this scheme ``SDoc`` would be a free-monad-style pretty-printer document
+   -- | A value that can be embedded in an error message.
+   data ErrorMessageItem = ...
+
+   -- | An error message, which is a document with
+   --   'ErrorMessageItem' annotations.
+   type ErrMsg = SDoc' ErrorMessageItem»ß
+
+In this scheme ``SDoc'`` would be a free-monad-style pretty-printer document
 (e.g. similar to that provided by ``wl-pprint-extras``).
 
 The ``ErrorMessageItem`` type is a sum type including a variety of
 elements frequently found in error messages that tooling users would find
-useful to have available in structured form. There are a number of things that
-might be included in this type but the initial cases we propose here fall into
-a few categories which we will address below.
+useful to have available in structured form. Each "client" of ``SDoc'``
+(compiler errors, Haskell/Core/STG/Cmm/LLVM/Assembly dumps, etc) would be
+free to pick its own annotation type and eventually turn the said annotations
+into textual contents or hand the rich document as-is to some other code.
+
+There are a number of things that might be included in this type but the
+initial cases we propose here fall into a few categories which we will
+address below.
 
 Haskell AST elements
 ~~~~~~~~~~~~~~~~~~~~
@@ -110,7 +123,7 @@ For instance, consider the case of the all-too-frequent expected-actual error ::
     Test.hs:7:7: error:
         • Couldn't match expected type ‘Int’ with actual type ‘[Char]’
         ...
-   
+
 This could be represented as ::
 
     data ErrorMessageItem
@@ -198,9 +211,9 @@ This might be built by GHC as ::
     <> embed (ESuggestAddedImport $import_span $foldl' [ $foldl, $foldl1 ])
 
 where ``$foo`` denotes the GHC AST item for ``foo`` and ``embed`` lifts an
-``ErrorMessageItem`` into an ``SDoc``::
+``ErrorMessageItem`` into an ``SDoc'``::
 
-    embed :: ErrorMessageItem -> SDoc ErrorMessageItem
+    embed :: ErrorMessageItem -> SDoc' ErrorMessageItem
     embed = pure
 
 Effect and Interactions
@@ -330,6 +343,27 @@ By contrast, with an ``embed``-style document it is clear that the embedded
 value represents a piece of the document which the consumer is free to
 render in any way it sees fit. All of the information relevant to the message
 is guaranteed to be in the embedded value.
+
+Moreover, it is easy to emulate scoped annotations with ``embed``-style
+documents, by attaching the document and the annotation together, as part of
+a "bigger", compound annotation:
+
+    -- using our embed-style SDoc to store both annotations as well
+    -- as the sub-documents that gets annotated with those values
+    newtyped ScopedSDoc a = ScopedSDoc
+      { getScopedSDoc :: SDoc' (a, ScopedSDoc a) }
+
+    -- scoped annotation function
+    scopedAnn :: a -> ScopedSDoc a -> ScopedSDoc a
+    scopedAnn a d = Scoped $ pure (a, d)
+
+Likewise, if we were using a scoped annotation friendly representation, say
+``SDoc2``, we would be able to emulate non-scoped annotations by scoping
+our annotations over empty documents:
+
+    -- assuming SDoc2 has 'annotate :: a -> SDoc2 a -> SDoc2 a'
+    ann :: a -> SDoc2 a
+    ann a = annotate a empty
 
 
 Unresolved Questions
