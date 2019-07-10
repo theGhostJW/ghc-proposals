@@ -110,7 +110,7 @@ We propose to refactor this into ::
 In this scheme ``SDoc'`` would be a free-monad-style pretty-printer document
 (e.g. similar to that provided by ``wl-pprint-extras``).
 
-Each "client" of ``SDoc'`` (compiler errors, Haskell/Core/STG/Cmm/LLVM/Assembly
+Each producer of ``SDoc'`` (compiler errors, Haskell/Core/STG/Cmm/LLVM/Assembly
 dumps, etc) would be free to pick its own annotation type and eventually turn
 the said annotations into textual contents or hand the rich document as-is to
 some other code. Or alternatively decide that it doesn't need any annotation
@@ -304,22 +304,24 @@ be useful. We hope that the discussion that arises from this proposal will shed
 light on additional items. Moreover, we anticipate that the vocabulary will
 grow in time as new tooling applications are found.
 
-A smaller but very concrete challenge is figuring out how to give users a hook
+A smaller but very concrete challenge is figuring out how to give users
+of the annotation mechanism (GHC API users, e.g IDE/tooling developers) a hook
 into the processing of error documents when they're reported (and possibly
 in other places where our prototype implementation had to "strip off"
 annotations) because of the lack of such a hook. Our prototype just applies
-the simplest ``SDoc' a -> SDoc`` function, while a user supplied function of
-type ``a -> SDoc`` for a suitable annotation type would let GHC adapt the
-final document, depending on the needs. One close solution is the ``log_action``
-field in ``DynFlags``, but it currently takes an ``SDoc``, and is probably not
-the only "document consumer" that would have to be updated. Any specific choice
-of annotation type would make it useless for "clients" that need another one
-(or none).
+the simplest annotation stripping function, which essentially replaces all
+annotations with the ``SDoc`` they're paired with, while a user supplied
+function of type ``a -> SDoc`` for a suitable annotation type would let GHC
+adapt the final document, depending on the needs, under all circumstances.
+One close solution is the ``log_action`` field in ``DynFlags``, but it
+currently takes an ``SDoc``, and is probably not the only "document consumer"
+that would have to be updated. Any specific choice of annotation type would
+make it useless for "clients" that need another one (or none).
 
-Variations
-----------
+Alternatives
+------------
 
-Two close variations have been examined:
+Two close variations on the proposal's design have been examined:
 
 * Make ``SDoc`` be ``SDoc' ErrorMessageItem``: this has the disadvantage of
   immediately making a bunch of types "wrong", if implemented. Indeed, a few
@@ -332,12 +334,11 @@ Two close variations have been examined:
   possibly offloads the rendering of annotations to typeclass instances.
   (One could consider ``Annotation = Outputable``.)
 
-Alternatives
-------------
-There are a few alternatives:
+
+There are a few alternatives routes, too:
 
 * Continuing representing error messages as plain pretty-printer documents.
-  We think this would be a shame as it would 
+  We think this would be a shame as it would IDE/tooling developers
 
 * Represent error messages as fully structured data using a large sum
   type. Core GHC contributors have in the past opposed this approach on
@@ -348,7 +349,7 @@ There are a few alternatives:
 * Adopt the above plan, but using a "scoped annotations"-style instead of a
   free monad pretty-printer.  See the `Why not scoped annotations?`_ section
   below.
-  
+
 * Richard Eisenberg has `suggested
   <https://gitlab.haskell.org//ghc/ghc/issues/8809#note_101739>`_ a
   dynamically-typed variant of the above idea. That is, ``SDoc`` would be
@@ -358,7 +359,7 @@ There are a few alternatives:
           = ...
           | forall a. (Typeable a, Outputable a) => Embed a
 
-  This gives us a slightly more flexible representation at the expense of 
+  This gives us a slightly more flexible representation at the expense of
   easy of consumption. In particular, it will be much harder for consumers
   to know what sort of things it should expect in a document.
 
