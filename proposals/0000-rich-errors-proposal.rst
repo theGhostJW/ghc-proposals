@@ -408,9 +408,12 @@ value represents a piece of the document which the consumer is free to
 render in any way it sees fit. All of the information relevant to the message
 is guaranteed to be in the embedded value.
 
-Moreover, it is easy to emulate scoped annotations with ``embed``-style
-documents, by attaching the document and the annotation together, as part of
-a "bigger", compound annotation:
+However, some applications (e.g. kythe_) are more natural to write
+with scoped-style annotations. For this cases it is possible to emulate scoped
+annotations with ``embed``-style document, by attaching the document and the
+annotation together, as part of a "bigger", compound annotation:
+
+.. _kythe: https://github.com/mpickering/core-kythe
 
     -- using our embed-style SDoc to store both annotations as well
     -- as the sub-documents that gets annotated with those values
