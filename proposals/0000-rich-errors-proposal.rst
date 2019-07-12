@@ -50,10 +50,15 @@ Also see `GHC #8809 <https://gitlab.haskell.org/ghc/ghc/issues/8809>`_.
 Proposed Change Specification
 -----------------------------
 Error messages in GHC are currently represented as simple pretty-printer
-documents (note: this is slightly simplified for the sake of discussion) ::
+documents (note: this is slightly simplified for the sake of discussion),
+accompanied by a class to give a common name to the function that turns
+all sorts of Haskell values into documents::
 
     -- | A pretty-printer document.
     data SDoc = ...
+
+    class Outputable a where
+      ppr :: a -> SDoc
 
     -- | An error message.
     type ErrMsg = SDoc
@@ -65,27 +70,67 @@ We propose to refactor this into ::
       = ...
       | Pure a
 
+   -- | 'fmap' transforms annotations
    instance Functor SDoc'
+   -- | 'pure' creates a document from an annotation (using 'Pure'),
+   --   @'(<*>)' = 'ap'@
    instance Applicative SDoc'
+   -- | '(>>=)' performs substitution of annotations with new subdocuments in
+   --   place of the 'Pure' nodes
    instance Monad SDoc'
 
-    -- | A value that can be embedded in an error message.
-    data ErrorMessageItem = ...
+   -- | A common name for annotation-agnostic pretty-printing functions
+   class Outputable a where
+     -- note how ppr's return type is polymorphic
+     -- in the annotation type
+     ppr :: a -> SDoc' b
 
-    -- | A document containing embedded 'ErrorMessageItem's.
-    type SDoc = SDoc' ErrorMessageItem
+   -- | A document containing no annotations whatsoever, can
+   --   be used in code generation for example.
+   type SDoc = SDoc' Void
 
-    -- | An error message.
-    type ErrMsg = SDoc
+   -- | Remove all annotations
+   stripAnnotations :: SDoc' a -> SDoc
 
-In this scheme ``SDoc`` would be a free-monad-style pretty-printer document
+   -- | Turn all annotations into purely textual contents
+   renderAnnotations :: (a -> SDoc) -> SDoc' a -> SDoc
+
+   -- | Render annotations using the annotation type's Outputable
+   --   instance.
+   pprAnnotations :: Outputable a => SDoc' a -> SDoc
+
+   -- | A value that can be embedded in an error message.
+   data ErrorMessageItem = ...
+
+   -- | An error message, which is a document with annotations
+   --   described by the 'ErrorMessageItem' type, all attached to their
+   --   typical GHC textual representation (an 'SDoc', no annotations)
+   type ErrMsg = SDoc' (ErrorMessageItem, SDoc)
+
+In this scheme ``SDoc'`` would be a free-monad-style pretty-printer document
 (e.g. similar to that provided by ``wl-pprint-extras``).
+
+Each producer of ``SDoc'`` (compiler errors, Haskell/Core/STG/Cmm/LLVM/Assembly
+dumps, etc) would be free to pick its own annotation type and eventually turn
+the said annotations into textual contents or hand the rich document as-is to
+some other code. Or alternatively decide that it doesn't need any annotation
+and work with ``SDoc`` values directly. With ``SDoc`` and ``ErrMsg``  being
+type synonyms of ``SDoc'``, specialized to particular annotation types, we can
+still use all the annotation-agnostic combinators for buiding up documents,
+including all the ``Outputable`` instances we have in the compiler.
+
+The ``Functor``, ``Applicative`` and ``Monad`` instances let us transform
+the annotations and combine them into possibly larger ones, when documents
+(and their annotations) are built from various small chunks that have their
+own rich meaning.
 
 The ``ErrorMessageItem`` type is a sum type including a variety of
 elements frequently found in error messages that tooling users would find
-useful to have available in structured form. There are a number of things that
-might be included in this type but the initial cases we propose here fall into
-a few categories which we will address below.
+useful to have available in structured form.
+
+There are a number of things that might be included in this type but the
+initial cases we propose here fall into a few categories which we will
+address below.
 
 Haskell AST elements
 ~~~~~~~~~~~~~~~~~~~~
@@ -94,7 +139,7 @@ These are the elements of the program we are compiling. For instance ::
 
     data ErrorMessageItem
       = ...
-      | EIdentifier Id    -- An identifier
+      | EIdentifier Id      -- An identifier
       | EExpr       HsExpr  -- A general expression
       | EType       HsType  -- A type
 
@@ -110,7 +155,7 @@ For instance, consider the case of the all-too-frequent expected-actual error ::
     Test.hs:7:7: error:
         • Couldn't match expected type ‘Int’ with actual type ‘[Char]’
         ...
-   
+
 This could be represented as ::
 
     data ErrorMessageItem
@@ -198,9 +243,9 @@ This might be built by GHC as ::
     <> embed (ESuggestAddedImport $import_span $foldl' [ $foldl, $foldl1 ])
 
 where ``$foo`` denotes the GHC AST item for ``foo`` and ``embed`` lifts an
-``ErrorMessageItem`` into an ``SDoc``::
+``ErrorMessageItem`` into an ``SDoc'``::
 
-    embed :: ErrorMessageItem -> SDoc ErrorMessageItem
+    embed :: ErrorMessageItem -> SDoc' ErrorMessageItem
     embed = pure
 
 Effect and Interactions
@@ -235,10 +280,14 @@ Costs and Drawbacks
 
 Judging from a prototype implementation undertaken a few years ago, the impact
 of embedding structured data instead of producing pretty-printer documents is
-quite minimal. The idioms which we are trying to represent are implemented
-in helper functions in ``TcErrors``, anyways.
+quite minimal, but not trivial either. The idioms which we are trying to
+represent are implemented in helper functions in ``TcErrors``, but we use
+or mention ``SDoc`` explicitly in various subsystems of GHC, so a complete
+implementation of the proposal would require updating type signatures that
+mention ``SDoc``, to make them more generic and take an ``SDoc' a``, wherever
+appropriate.
 
-One unexpected challenge in implementing the prototype was the difficulty of 
+One unexpected challenge in implementing the prototype was the difficulty of
 finding or adapting a pretty-printer library with the desired monadic
 annotation semantics that does not break the formatting of GHC's error message
 output. A previous attempt at using the ``wl-pprint-extras`` library found
@@ -255,13 +304,41 @@ be useful. We hope that the discussion that arises from this proposal will shed
 light on additional items. Moreover, we anticipate that the vocabulary will
 grow in time as new tooling applications are found.
 
+A smaller but very concrete challenge is figuring out how to give users
+of the annotation mechanism (GHC API users, e.g IDE/tooling developers) a hook
+into the processing of error documents when they're reported (and possibly
+in other places where our prototype implementation had to "strip off"
+annotations) because of the lack of such a hook. Our prototype just applies
+the simplest annotation stripping function, which essentially replaces all
+annotations with the ``SDoc`` they're paired with, while a user supplied
+function of type ``a -> SDoc`` for a suitable annotation type would let GHC
+adapt the final document, depending on the needs, under all circumstances.
+One close solution is the ``log_action`` field in ``DynFlags``, but it
+currently takes an ``SDoc``, and is probably not the only "document consumer"
+that would have to be updated. Any specific choice of annotation type would
+make it useless for "clients" that need another one (or none).
 
 Alternatives
 ------------
-There are a few alternatives:
+
+Two close variations on the proposal's design have been examined:
+
+* Make ``SDoc`` be ``SDoc' ErrorMessageItem``: this has the disadvantage of
+  immediately making a bunch of types "wrong", if implemented. Indeed, a few
+  code generators produce ``SDoc`` values when generating assembly, and
+  claiming that such documents can possibly embed ``ErrorMessageItem``
+  annotations seems confusing.
+
+* Make ``SDoc`` be ``forall a. Annotation a => SDoc' a``: this forces the use
+  of an additional extension in all the modules that mention ``SDoc``, but
+  possibly offloads the rendering of annotations to typeclass instances.
+  (One could consider ``Annotation = Outputable``.)
+
+
+There are a few alternatives routes, too:
 
 * Continuing representing error messages as plain pretty-printer documents.
-  We think this would be a shame as it would 
+  We think this would be a shame as it would IDE/tooling developers
 
 * Represent error messages as fully structured data using a large sum
   type. Core GHC contributors have in the past opposed this approach on
@@ -272,7 +349,7 @@ There are a few alternatives:
 * Adopt the above plan, but using a "scoped annotations"-style instead of a
   free monad pretty-printer.  See the `Why not scoped annotations?`_ section
   below.
-  
+
 * Richard Eisenberg has `suggested
   <https://gitlab.haskell.org//ghc/ghc/issues/8809#note_101739>`_ a
   dynamically-typed variant of the above idea. That is, ``SDoc`` would be
@@ -282,7 +359,7 @@ There are a few alternatives:
           = ...
           | forall a. (Typeable a, Outputable a) => Embed a
 
-  This gives us a slightly more flexible representation at the expense of 
+  This gives us a slightly more flexible representation at the expense of
   easy of consumption. In particular, it will be much harder for consumers
   to know what sort of things it should expect in a document.
 
@@ -330,6 +407,30 @@ By contrast, with an ``embed``-style document it is clear that the embedded
 value represents a piece of the document which the consumer is free to
 render in any way it sees fit. All of the information relevant to the message
 is guaranteed to be in the embedded value.
+
+However, some applications (e.g. kythe_) are more natural to write
+with scoped-style annotations. For this cases it is possible to emulate scoped
+annotations with ``embed``-style document, by attaching the document and the
+annotation together, as part of a "bigger", compound annotation:
+
+.. _kythe: https://github.com/mpickering/core-kythe
+
+    -- using our embed-style SDoc to store both annotations as well
+    -- as the sub-documents that gets annotated with those values
+    newtyped ScopedSDoc a = ScopedSDoc
+      { getScopedSDoc :: SDoc' (a, ScopedSDoc a) }
+
+    -- scoped annotation function
+    scopedAnn :: a -> ScopedSDoc a -> ScopedSDoc a
+    scopedAnn a d = Scoped $ pure (a, d)
+
+Likewise, if we were using a scoped annotation friendly representation, say
+``SDoc2``, we would be able to emulate non-scoped annotations by scoping
+our annotations over empty documents:
+
+    -- assuming SDoc2 has 'annotate :: a -> SDoc2 a -> SDoc2 a'
+    ann :: a -> SDoc2 a
+    ann a = annotate a empty
 
 
 Unresolved Questions
