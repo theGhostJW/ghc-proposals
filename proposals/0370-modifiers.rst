@@ -34,7 +34,7 @@ A separate proposal `#242`_ describes how the matchability of a function will
 be written postfix, with a ``@``. (The precise meaning of "matchability" is
 irrelevant here.) So, if someone wanted to specify both the multiplicity and
 the matchability of a function, they would write e.g. ``Int %Many -> @Unmatchable Bool``.
-The problme is that we can easily imagine yet more decorations one would want
+The problem is that we can easily imagine yet more decorations one would want
 to put on an arrow. With multiplicity coming before and matchability afterwards,
 there is now no more room for other modifiers (such as injectivity, or visibility,
 or higher-order role, or others we haven't imagined yet).
